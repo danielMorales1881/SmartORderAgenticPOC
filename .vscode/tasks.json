@@ -2,6 +2,19 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "kill-port-5101",
+      "type": "shell",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-Process -Name SmartOrders.Api -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue; (Get-NetTCPConnection -LocalPort 5101 -ErrorAction SilentlyContinue).OwningProcess | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }"
+      ],
+      "presentation": { "reveal": "silent", "panel": "shared", "close": true },
+      "problemMatcher": []
+    },
+    {
       "label": "build",
       "command": "dotnet",
       "type": "process",
@@ -16,6 +29,12 @@
         "kind": "build",
         "isDefault": true
       }
+    },
+    {
+      "label": "kill-and-build",
+      "dependsOrder": "sequence",
+      "dependsOn": ["kill-port-5101", "build"],
+      "problemMatcher": []
     }
   ]
 }

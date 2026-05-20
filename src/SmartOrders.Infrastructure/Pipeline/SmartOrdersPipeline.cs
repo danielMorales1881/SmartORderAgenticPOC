@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using SmartOrders.Core.Domain;
 using SmartOrders.Core.Pipeline;
 using SmartOrders.Infrastructure.Agents;
+using SmartOrders.Infrastructure.NoteGateway;
 using SmartOrders.Infrastructure.Services;
 
 namespace SmartOrders.Infrastructure.Pipeline;
@@ -27,6 +28,7 @@ public sealed partial class SmartOrdersPipeline(
     public async Task<PipelineState> RunAsync(string clinicalText, IProgress<PipelineProgressEvent>? progress = null, CancellationToken ct = default)
     {
         var state = new PipelineState { ClinicalText = clinicalText };
+        var usageTracker = LlmUsageScope.Begin();
 
         // Stage 1: IntentAgent
         progress?.Report(new PipelineProgressEvent("stage_start", "IntentAgent", "Extracting order intents from clinical text..."));
@@ -43,6 +45,7 @@ public sealed partial class SmartOrdersPipeline(
         {
             progress?.Report(new PipelineProgressEvent("error", "IntentAgent", "No order intents found in clinical text."));
             logger.LogInformation("pipeline_short_circuit reason=no_intents");
+            ApplyMetrics(state, usageTracker, progress);
             return state;
         }
 
@@ -75,6 +78,7 @@ public sealed partial class SmartOrdersPipeline(
         progress?.Report(new PipelineProgressEvent("awaiting_confirmation", "SubmissionAgent",
             state.SubmissionAgentResponse, Data: state.ValidatedOrdersJson));
 
+        ApplyMetrics(state, usageTracker, progress);
         return state;
     }
 
@@ -87,6 +91,7 @@ public sealed partial class SmartOrdersPipeline(
         string validatedOrdersJson, string providerConfirmation, CancellationToken ct = default)
     {
         var state = new PipelineState { ValidatedOrdersJson = validatedOrdersJson };
+        var usageTracker = LlmUsageScope.Begin();
 
         var confirmInput = $"""
             validated_orders:
@@ -106,7 +111,35 @@ public sealed partial class SmartOrdersPipeline(
         state.SubmissionAgentResponse = submissionResponse.Text ?? "";
         state.AwaitingConfirmation = false;
 
+        ApplyMetrics(state, usageTracker, null);
         return state;
+    }
+
+    private void ApplyMetrics(
+        PipelineState state,
+        LlmUsageTracker tracker,
+        IProgress<PipelineProgressEvent>? progress)
+    {
+        state.LlmCallCount      = tracker.TotalCalls;
+        state.TotalInputTokens  = tracker.TotalInputTokens;
+        state.TotalOutputTokens = tracker.TotalOutputTokens;
+        state.EstimatedCostUsd  = tracker.EstimatedCostUsd;
+
+        logger.LogInformation(
+            "pipeline_metrics calls={Calls} input={In} output={Out} cost=${Cost:F4}",
+            tracker.TotalCalls, tracker.TotalInputTokens, tracker.TotalOutputTokens, tracker.EstimatedCostUsd);
+
+        progress?.Report(new PipelineProgressEvent(
+            "pipeline_metrics",
+            "Pipeline",
+            $"{tracker.TotalCalls} LLM call(s) · {tracker.TotalInputTokens + tracker.TotalOutputTokens:N0} tokens · ~${tracker.EstimatedCostUsd:F4}",
+            Data: JsonSerializer.Serialize(new
+            {
+                llmCallCount      = tracker.TotalCalls,
+                totalInputTokens  = tracker.TotalInputTokens,
+                totalOutputTokens = tracker.TotalOutputTokens,
+                estimatedCostUsd  = tracker.EstimatedCostUsd
+            })));
     }
 
 

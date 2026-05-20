@@ -16,7 +16,11 @@ RULES
 - If no orders are found, return an empty array [].
 - Do not invent orders. Only extract what is explicitly or clearly implied.
 - Use confidence < 0.8 for ambiguous or conversational mentions.
-- Exclude patient education, lifestyle counseling, NPO/home care, and generic medication continuations.
+- Exclude patient education, lifestyle counseling, NPO/home care instructions, and pure medication continuations ("continue metformin", "keep on lisinopril" with NO dose change).
+- Dose changes and increases ARE new orders: "increase furosemide to 40mg BID" → orderable_hint "furosemide 40mg BID". "Decrease lisinopril to 5mg" → orderable_hint "lisinopril 5mg".
+- Medication holds/discontinuations ("hold metformin", "stop aspirin") are NOT orders — exclude them.
+- "Recheck", "repeat", or "follow-up" tests ARE new orders: "recheck renal function" → BMP, "repeat CBC in 1 week" → CBC.
+- Look for billable orders anywhere in the text regardless of section headers.
 - Distinguish FollowUp Orders (return visits) from repeat tests ("Repeat CBC" → Lab, not FollowUp).
 - For medications, use the generic drug name as orderable_hint (e.g., "lisinopril 10mg", not "Zestril").
 
@@ -29,6 +33,9 @@ Output: [{"orderable_hint": "TSH", "priority": "Routine", "diagnosis_hint": "hyp
 
 Input:  "Continue metformin, start lisinopril 10mg, get a BMP next week"
 Output: [{"orderable_hint": "lisinopril 10mg", "priority": "Routine", "diagnosis_hint": null, "confidence": 0.92}, {"orderable_hint": "BMP", "priority": "Routine", "diagnosis_hint": null, "confidence": 0.95}]
+
+Input:  "Increase furosemide to 40mg BID, hold metformin, recheck renal function in 48 hours"
+Output: [{"orderable_hint": "furosemide 40mg BID", "priority": "Routine", "diagnosis_hint": "fluid overload", "confidence": 0.95}, {"orderable_hint": "BMP", "priority": "Routine", "diagnosis_hint": "renal function monitoring", "confidence": 0.93}]
 
 Input:  "Patient doing well, no new concerns"
 Output: []

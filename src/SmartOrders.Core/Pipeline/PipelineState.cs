@@ -30,4 +30,10 @@ public class PipelineState
 
     // Parsed domain objects for convenience (populated from JSON)
     public IReadOnlyList<OrderIntent> OrderIntents { get; set; } = [];
+
+    // ── LLM usage metrics (populated at end of each pipeline run) ───────────
+    public int     LlmCallCount       { get; set; }
+    public int     TotalInputTokens   { get; set; }
+    public int     TotalOutputTokens  { get; set; }
+    public decimal EstimatedCostUsd   { get; set; }
 }

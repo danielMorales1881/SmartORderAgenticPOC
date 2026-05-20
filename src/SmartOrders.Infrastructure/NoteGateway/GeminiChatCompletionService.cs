@@ -133,7 +133,35 @@ public sealed class GeminiChatCompletionService : IChatClient
 
         _logger.LogInformation("gemini_raw_response status={Status} body={Body}", (int)response.StatusCode, responseBody[..Math.Min(1000, responseBody.Length)]);
 
-        return ParseResponse(responseBody);
+        var chatResponse = ParseResponse(responseBody);
+        RecordUsage(responseBody);
+        return chatResponse;
+    }
+
+    /// <summary>
+    /// Parses <c>usageMetadata</c> from the raw Gemini response and records it in the
+    /// active <see cref="LlmUsageScope"/> (no-op when called outside a pipeline run).
+    /// </summary>
+    private static void RecordUsage(string responseBody)
+    {
+        if (LlmUsageScope.Current is not { } tracker) return;
+
+        var inputTokens = 0;
+        var outputTokens = 0;
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("usageMetadata", out var usage))
+            {
+                if (usage.TryGetProperty("promptTokenCount", out var pIn))
+                    inputTokens = pIn.GetInt32();
+                if (usage.TryGetProperty("candidatesTokenCount", out var pOut))
+                    outputTokens = pOut.GetInt32();
+            }
+        }
+        catch { /* non-critical — still record the call */ }
+
+        tracker.RecordCall(inputTokens, outputTokens);
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(

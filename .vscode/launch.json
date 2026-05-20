@@ -5,7 +5,7 @@
       "name": "Smart Orders API",
       "type": "coreclr",
       "request": "launch",
-      "preLaunchTask": "build",
+      "preLaunchTask": "kill-and-build",
       "program": "${workspaceFolder}/src/SmartOrders.Api/bin/Debug/net10.0/SmartOrders.Api.dll",
       "args": [],
       "cwd": "${workspaceFolder}/src/SmartOrders.Api",
