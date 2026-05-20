@@ -17,7 +17,7 @@ Ask the user:
 - What `PipelineState` field does it write to? (its own output)
 - Does it need plugins/tools? Which ones?
 - Does it require HITL (human-in-the-loop)?
-- Structured JSON output (`JsonMode=true`) or tool-using (`FunctionChoiceBehavior.Auto()`)?
+- Structured JSON output (JSON mode + responseSchema) or tool-using (UseFunctionInvocation)?
 
 ### 2. Add the PipelineState field
 
@@ -36,20 +36,39 @@ Open `src/SmartOrders.Infrastructure/Agents/AgentFactory.cs` and add:
 /// <One-line description>.
 /// Equivalent to <name>_agent.py in smart-orders-adk.
 /// </summary>
-public static ChatCompletionAgent Create<Name>Agent(Kernel kernel, string instruction) =>
-    new()
-    {
-        Name = "<Name>Agent",
-        Description = "<One-line description>",
-        Instructions = instruction,
-        Kernel = kernel,
-        Arguments = new KernelArguments(new GeminiExecutionSettings
+
+// JSON-output agent (no tools):
+public static AIAgent Create<Name>Agent(IChatClient baseClient, string instruction)
+{
+    var client = baseClient.AsBuilder()
+        .ConfigureOptions(opts =>
         {
-            JsonMode = true,            // if structured output
-            // FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(), // if tools
-            MaxOutputTokens = 512,      // adjust as needed
-        }),
-    };
+            opts.ResponseFormat = ChatResponseFormat.Json;
+            opts.MaxOutputTokens = 512;   // adjust as needed
+            opts.AdditionalProperties ??= [];
+            opts.AdditionalProperties["response_schema"] = s_mySchema;
+        })
+        .Build();
+    return client.AsAIAgent(name: "<Name>Agent", instructions: instruction);
+}
+
+// Tool-using agent:
+public static AIAgent Create<Name>Agent(
+    IChatClient baseClient,
+    string instruction,
+    MyPlugin myPlugin)
+{
+    List<AITool> tools =
+    [
+        AIFunctionFactory.Create(
+            (Func<string, CancellationToken, Task<string>>)myPlugin.MyMethodAsync),
+    ];
+    var client = baseClient.AsBuilder()
+        .ConfigureOptions(opts => opts.MaxOutputTokens = 2048)
+        .UseFunctionInvocation()
+        .Build();
+    return client.AsAIAgent(name: "<Name>Agent", instructions: instruction, tools: tools);
+}
 ```
 
 ### 4. Create the prompt file
@@ -78,25 +97,25 @@ EXAMPLES
 
 Open `src/SmartOrders.Infrastructure/Pipeline/SmartOrdersPipeline.cs`.
 
-1. Add constructor parameter: `ChatCompletionAgent <name>Agent`
+1. Add constructor parameter: `AIAgent <name>Agent`
 2. Add pipeline stage in `RunAsync`:
 
 ```csharp
 // Stage N: <Name>Agent
 logger.LogInformation("pipeline_stage stage=<Name>Agent");
-var <name>Input = $"<upstream_state_key>:\n{state.<UpstreamField>}";
-var <name>Raw = await RunAgentAsync(<name>Agent, <name>Input, ct);
-state.<Name>ResultsJson = ExtractJsonArray(<name>Raw);
+var <name>Response = await <name>Agent.RunAsync(
+    $"<upstream_state_key>:\n{state.<UpstreamField>}", cancellationToken: ct);
+state.<Name>ResultsJson = <name>Response.Text ?? "[]";
 logger.LogInformation("<name>_complete");
 ```
 
-### 6. Wire up in Program.cs
+### 6. Wire up in SmartOrdersServiceCollectionExtensions
 
-Open `src/SmartOrders.Api/Program.cs`.
+Open `src/SmartOrders.Infrastructure/SmartOrdersServiceCollectionExtensions.cs`.
 
-1. Load the prompt: `LoadPrompt("<name>_agent")`
-2. Pass the new agent to `SmartOrdersPipeline` constructor
-3. If new plugins are needed, register them on the Kernel first
+1. Instantiate any new plugins: `ActivatorUtilities.CreateInstance<MyPlugin>(sp)`
+2. Call the new factory method: `AgentFactory.Create<Name>Agent(baseClient, LoadPrompt("<name>_agent"), ...)`
+3. Pass the new agent to the `SmartOrdersPipeline` constructor
 
 ### 7. Update state ownership table
 

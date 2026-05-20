@@ -1,18 +1,17 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
 using SmartOrders.Core.Repositories;
 
 namespace SmartOrders.Infrastructure.Plugins;
 
 /// <summary>
-/// Bridges the Semantic Kernel tool call to IOrderCatalogRepository.
+/// Bridges the Agent Framework tool call to IOrderCatalogRepository.
 /// Returns {item_id, display_name, order_category} matching Python search_orders output.
 /// </summary>
 public sealed class SearchPlugin(IOrderCatalogRepository catalog, ILogger<SearchPlugin> logger)
 {
-    [KernelFunction, Description("Search the TouchWorks order catalog for matching orderable items.")]
+    [Description("Search the TouchWorks order catalog for matching orderable items.")]
     public async Task<string> SearchOrdersAsync(
         [Description("Clinical search term e.g. 'CBC', 'chest X-ray'.")] string text,
         [Description("Optional RPL scope to filter results. Omit to search all RPLs.")] double? rplDe = null,

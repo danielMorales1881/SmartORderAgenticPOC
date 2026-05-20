@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
 
 namespace SmartOrders.Infrastructure.Plugins;
 
@@ -23,7 +22,7 @@ public sealed class MappingPlugin(ILogger<MappingPlugin> logger)
         ["heart failure"] = "I50.9", ["chf"] = "I50.9",
     };
 
-    [KernelFunction, Description("Map a free-text diagnosis hint to an ICD-10 code.")]
+    [Description("Map a free-text diagnosis hint to an ICD-10 code.")]
     public Task<string> MapDiagnosisAsync(
         [Description("Clinical text hint e.g. 'type 2 diabetes'.")] string diagnosisHint)
     {
@@ -32,7 +31,7 @@ public sealed class MappingPlugin(ILogger<MappingPlugin> logger)
         return Task.FromResult(JsonSerializer.Serialize(new { icd10_code = code }));
     }
 
-    [KernelFunction, Description("Apply standard clinical defaults for a given order type.")]
+    [Description("Apply standard clinical defaults for a given order type.")]
     public Task<string> ApplyOrderDefaultsAsync(
         [Description("Broad category: 'Lab', 'Imaging', 'Medication', 'Referral'.")] string orderType,
         [Description("Priority override. Null defaults to 'Routine'.")] string? priority = null)

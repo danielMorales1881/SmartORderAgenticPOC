@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
 using SmartOrders.Core.Repositories;
 
 namespace SmartOrders.Infrastructure.Plugins;
@@ -12,7 +11,7 @@ namespace SmartOrders.Infrastructure.Plugins;
 /// </summary>
 public sealed class SubmissionPlugin(ITwOrderQueueRepository queue, ILogger<SubmissionPlugin> logger)
 {
-    [KernelFunction, Description("Submit a provider-confirmed order to the TouchWorks Order Engine. Call ONLY after explicit provider confirmation.")]
+    [Description("Submit a provider-confirmed order to the TouchWorks Order Engine. Call ONLY after explicit provider confirmation.")]
     public async Task<string> SubmitOrderAsync(
         [Description("Item ID from the TW catalog (ItemID / HDROrderCode).")] string orderDe,
         [Description("Human-readable order display name.")] string orderName,

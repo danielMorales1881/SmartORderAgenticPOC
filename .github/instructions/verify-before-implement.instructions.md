@@ -22,12 +22,20 @@ When unsure about the correct way to do something (API usage, type signatures, p
 - `CollectionExistsAsync(collectionName, ct)` → returns `bool` directly.
 - **NOTE**: `QdrantClient(path=...)` is Python-only embedded mode. .NET ALWAYS uses `new QdrantClient(host, port)`.
 
-### Microsoft.SemanticKernel (v1.76.0)
+### Microsoft.Agents.AI (v1.6.1) — Microsoft Agent Framework
 
-- `ChatCompletionAgent.InvokeAsync(history, ct)` → `IAsyncEnumerable<ChatMessageContent>` (iterate with `await foreach`).
-- `FunctionChoiceBehavior.Auto()` → enables automatic tool selection.
-- `k.Plugins.AddFromObject(instance, "PluginName")` → registers plugin instance.
-- Never call `kernel.InvokeAsync` for agent execution — use `agent.InvokeAsync(history, ct)`.
+This project uses **Microsoft Agent Framework**, NOT Semantic Kernel. Key APIs (verified May 2026):
+
+- `IChatClient.AsBuilder()` → `IChatClientBuilder` — configure per-agent options and middleware.
+- `.ConfigureOptions(opts => { opts.ResponseFormat = ...; opts.MaxOutputTokens = N; })` → sets `ChatOptions` on every call.
+- `.UseFunctionInvocation()` → enables the automatic tool-call loop middleware.
+- `.Build()` → returns `IChatClient` with middleware applied.
+- `client.AsAIAgent(name, instructions, tools?)` → creates `AIAgent`.
+- `await agent.RunAsync(inputText, cancellationToken: ct)` → runs agent, returns `AgentResponse` with `.Text`.
+- `AIFunctionFactory.Create((Func<...>)plugin.MethodAsync)` → wraps a method as `AITool`.
+- Cast to exact delegate `(Func<string, double?, int, CancellationToken, Task<string>>)method` to disambiguate overloads.
+
+Do NOT use `ChatCompletionAgent`, `KernelArguments`, `FunctionChoiceBehavior.Auto()`, or `kernel.Plugins.AddFromObject` — those are Semantic Kernel APIs not present in this project.
 
 ### Microsoft.ML.Tokenizers (v1.0.3)
 

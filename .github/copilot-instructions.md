@@ -5,7 +5,7 @@
 **Smart Orders** is an AI-assisted clinical order entry system for TouchWorks EHR (release 26.3),
 owned by the V11 Ambient team at Altera Digital Health. This repository (`smart-orders-dotnet`) is the
 **C# .NET 10 orchestration layer** — it runs as an ASP.NET Core Web API that hosts the full
-Smart Orders multi-agent pipeline using **Microsoft Semantic Kernel**.
+Smart Orders multi-agent pipeline using **Microsoft Agent Framework** (`Microsoft.Agents.AI`).
 
 This is a direct functional port of the Python ADK sidecar (`smart-orders-adk`). Every agent, tool,
 and pipeline stage maps 1-to-1 to a Python equivalent.
@@ -175,13 +175,17 @@ Set in `appsettings.json`:
 - **Credentials**: Never hardcode. Always Key Vault → `appsettings.json` → `IOptions<T>`.
 - **Logging**: Structured logging via `ILogger<T>`. Use `LogDebug` for per-request telemetry, `LogInformation` for pipeline milestones, `LogError` for exceptions.
 
-### Semantic Kernel patterns
+### Microsoft Agent Framework patterns (Microsoft.Agents.AI v1.6.1)
 
-- **Agents**: Always created via `AgentFactory` static methods — never `new ChatCompletionAgent { ... }` inline outside of the factory.
-- **Plugins**: Decorated with `[KernelFunction]` + `[Description]`. Registered on the `Kernel` via `k.Plugins.AddFromObject(...)`.
-- **Tools**: Plain `async Task<string>` methods — return JSON string. Mirrors Python `@tool` async functions.
-- **JSON output**: Use `GeminiExecutionSettings { JsonMode = true }` for structured agent output (equivalent to Python `output_schema`).
-- **State passing**: Pass upstream agent output as context in the user message for the next agent. Format: `"<state_key>:\n{json}"`.
+This project uses **Microsoft Agent Framework** — NOT Semantic Kernel. Do NOT import `Microsoft.SemanticKernel`.
+
+- **Agents**: Always created via `AgentFactory` static methods — never inline. Factory returns `AIAgent`.
+- **Plugins**: Plain `async Task<string>` methods with `[Description]` attributes — no `[KernelFunction]`.
+- **Tools**: Registered at agent creation via `AIFunctionFactory.Create((Func<...>)plugin.Method)`. No Kernel needed.
+- **JSON output**: `client.AsBuilder().ConfigureOptions(opts => { opts.ResponseFormat = ChatResponseFormat.Json; opts.AdditionalProperties["response_schema"] = schema; })` (equivalent to Python `output_schema`).
+- **Tool calls**: `.UseFunctionInvocation()` middleware on `IChatClientBuilder` (equivalent to Python `tools=[...]`).
+- **Run agent**: `await agent.RunAsync(inputText, cancellationToken: ct)` → returns `AgentResponse` with `.Text`.
+- **State passing**: Pass upstream output as plain text in the next agent's input: `$"order_intents:\n{state.OrderIntentsJson}"`.
 
 ### Qdrant .NET client
 
@@ -205,11 +209,10 @@ These align exactly with the `OIDExtract.db` schema's `Order Category` column.
 
 | Layer | Package | Version |
 |---|---|---|
-| Infrastructure | `Microsoft.SemanticKernel` | 1.76.0 |
-| Infrastructure | `Microsoft.SemanticKernel.Agents.Core` | 1.76.0 |
+| Infrastructure | `Microsoft.Agents.AI` | 1.6.1 |
 | Infrastructure | `Qdrant.Client` | 1.13.0 |
 | Infrastructure | `Microsoft.ML.OnnxRuntime` | 1.21.0 |
-| Infrastructure | `Microsoft.ML.Tokenizers` | 1.0.3 |
+| Infrastructure | `Microsoft.ML.Tokenizers` | 2.0.0 |
 | Infrastructure | `Microsoft.Data.Sqlite` | 10.0.8 |
 | Infrastructure | `Microsoft.Identity.Client` (MSAL) | 4.84.1 |
 
@@ -252,3 +255,4 @@ These align exactly with the `OIDExtract.db` schema's `Order Category` column.
 - Do NOT use `.Result` or `.Wait()` on async methods.
 - Do NOT add framework imports to `SmartOrders.Core` — it must remain framework-free.
 - Do NOT use `QdrantClient(path=...)` — not supported in .NET client.
+- Do NOT use `[KernelFunction]`, `ChatCompletionAgent`, `Kernel`, or `GeminiExecutionSettings` — those are Semantic Kernel APIs; this project uses Microsoft Agent Framework (`Microsoft.Agents.AI`).

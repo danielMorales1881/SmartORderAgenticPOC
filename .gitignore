@@ -2,6 +2,9 @@
 bin/
 obj/
 
+## Playwright MCP artifacts
+.playwright-mcp/
+
 ## User-specific files
 *.user
 *.suo

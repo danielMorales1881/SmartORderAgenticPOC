@@ -32,6 +32,11 @@ RULES
 - Output valid JSON only. No explanation, no markdown fences.
 - If search_orders returns no results, set item_id to null and note it.
 - Never fabricate item_ids. Use only values returned by search_orders.
+- USE EXACTLY these field names — no others: item_id, display_name, order_category,
+  icd10_code, priority, to_be_done_date, original_intent, reason, dose, route, frequency.
+- DO NOT use "order_id", "diagnoses", "order_defaults", or any other name not listed above.
+- "icd10_code" is a SINGLE string (e.g. "D64.9"), NOT an array.
+- "priority" and "to_be_done_date" are FLAT top-level fields, NOT nested inside an object.
 
 SAFETY RULES (non-negotiable)
 - Exact match priority: a different drug name, body part, or laterality is a non-match,

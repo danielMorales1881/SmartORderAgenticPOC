@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
 
 namespace SmartOrders.Infrastructure.Plugins;
 
@@ -42,7 +41,7 @@ public sealed class ValidationPlugin(ILogger<ValidationPlugin> logger)
         ["followup"] = "FollowUp Orders", ["follow up"] = "FollowUp Orders", ["follow-up"] = "FollowUp Orders",
     };
 
-    [KernelFunction, Description("Validate that all required fields are present for an order.")]
+    [Description("Validate that all required fields are present for an order.")]
     public Task<string> ValidateOrderFieldsAsync(
         [Description("The catalog item ID — confirms the order was mapped.")] string itemId,
         [Description("Broad category e.g. 'Lab', 'Imaging'.")] string orderCategory,

@@ -26,7 +26,6 @@ Create `src/SmartOrders.Infrastructure/Plugins/<Name>Plugin.cs`:
 using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.SemanticKernel;
 
 namespace SmartOrders.Infrastructure.Plugins;
 
@@ -36,7 +35,7 @@ namespace SmartOrders.Infrastructure.Plugins;
 /// </summary>
 public sealed class <Name>Plugin(/* dependencies */, ILogger<<Name>Plugin> logger)
 {
-    [KernelFunction, Description("<Clear description of what this tool does.>")]
+    [Description("<Clear description of what this tool does.>")]
     public async Task<string> <ToolMethod>Async(
         [Description("<What this parameter means>.")] string param,
         CancellationToken cancellationToken = default)
@@ -47,6 +46,8 @@ public sealed class <Name>Plugin(/* dependencies */, ILogger<<Name>Plugin> logge
     }
 }
 ```
+
+Note: Do NOT add `[KernelFunction]` — this project uses Microsoft Agent Framework, not Semantic Kernel.
 
 ### 3. Add interface to Core (if new I/O dependency)
 
@@ -61,26 +62,38 @@ public interface I<Name>Repository
 
 Implement in `src/SmartOrders.Infrastructure/Repositories/<Name>Repository.cs`.
 
-### 4. Register in Program.cs
+### 4. Register the plugin and wire to the agent
 
-Open `src/SmartOrders.Api/Program.cs`.
+Open `src/SmartOrders.Infrastructure/SmartOrdersServiceCollectionExtensions.cs`.
 
-1. Register the repository (if added):
+1. Register any new repository in `Program.cs`:
 ```csharp
 builder.Services.AddSingleton<I<Name>Repository, <Name>Repository>();
 ```
 
-2. Register the plugin on the Kernel:
+2. Instantiate the plugin in `SmartOrdersServiceCollectionExtensions`:
 ```csharp
-k.Plugins.AddFromObject(ActivatorUtilities.CreateInstance<<Name>Plugin>(sp), "<PluginGroupName>");
+var myPlugin = ActivatorUtilities.CreateInstance<<Name>Plugin>(sp);
 ```
 
-### 5. Assign to the correct agent
+3. Pass it to the target agent factory method in `AgentFactory`:
+```csharp
+AgentFactory.CreateMappingAgent(baseClient, LoadPrompt("mapping_agent"), searchPlugin, mappingPlugin, myPlugin)
+```
 
-In `AgentFactory`, confirm the target agent uses `FunctionChoiceBehavior.Auto()` so it can invoke the new tool.
-The MappingAgent and SubmissionAgent both use auto function calling.
+4. In `AgentFactory`, add the new tool to the agent's tool list:
+```csharp
+List<AITool> tools =
+[
+    // existing tools ...
+    AIFunctionFactory.Create(
+        (Func<string, CancellationToken, Task<string>>)myPlugin.<ToolMethod>Async),
+];
+```
 
-### 6. Write unit tests
+The target agent must use `.UseFunctionInvocation()` middleware (MappingAgent and SubmissionAgent both do).
+
+### 5. Write unit tests
 
 Create `tests/SmartOrders.Unit/Test<Name>Plugin.cs`:
 
