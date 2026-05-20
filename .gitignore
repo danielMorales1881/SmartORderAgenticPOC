@@ -1,0 +1,39 @@
+## Build outputs
+bin/
+obj/
+
+## User-specific files
+*.user
+*.suo
+.vs/
+.vscode/settings.json
+
+## NuGet packages
+*.nupkg
+packages/
+!packages/repositories.config
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Secrets and local overrides (NEVER commit these)
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.json
+!appsettings.json
+.env
+.env.*
+secrets.json
+
+## Large binary data files (models, databases)
+data/
+
+## OS files
+Thumbs.db
+.DS_Store
+
+## Coverage
+TestResults/
+coverage*.xml
+coverage*.json
+*.coveragexml

@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Orders</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --surface2: #293548;
+      --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+      --blue: #3b82f6; --blue-dim: #1d4ed8; --green: #22c55e;
+      --amber: #f59e0b; --red: #ef4444; --purple: #a78bfa;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Header ── */
+    header { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+    header h1 { font-size: 1.1rem; font-weight: 700; }
+    .badge { background: #1e3a5f; color: #60a5fa; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.06em; }
+
+    /* ── Layout ── */
+    main { display: grid; grid-template-columns: 420px 1fr; flex: 1; overflow: hidden; }
+    @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+
+    /* ── Left panel ── */
+    .input-panel { display: flex; flex-direction: column; border-right: 1px solid var(--border); padding: 20px; gap: 14px; }
+    label { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    textarea {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--font); font-size: 0.88rem; line-height: 1.6;
+      padding: 12px; resize: vertical; min-height: 140px;
+    }
+    textarea:focus { outline: none; border-color: var(--blue); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 22px; border: none; border-radius: 8px;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.15s, opacity 0.15s; width: 100%;
+    }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-primary:hover { background: var(--blue-dim); }
+    .btn-success { background: #166534; color: var(--green); border: 1px solid #16a34a; }
+    .btn-success:hover { background: #14532d; }
+    .btn-danger  { background: transparent; color: var(--red); border: 1px solid var(--red); }
+    .btn-danger:hover  { background: #450a0a; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.65s linear infinite; display: none; }
+    .btn.loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Right panel ── */
+    .right-panel { display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Activity log ── */
+    .log-area { flex: 1; overflow-y: auto; padding: 16px 20px; font-family: "SF Mono", "Consolas", monospace; font-size: 0.8rem; line-height: 1.7; }
+    .log-empty { color: var(--muted); font-style: italic; padding: 40px 0; text-align: center; }
+    .log-line { display: flex; gap: 10px; padding: 2px 0; }
+    .log-icon { flex-shrink: 0; width: 18px; text-align: center; }
+    .log-agent { font-weight: 700; flex-shrink: 0; }
+    .log-msg { color: #cbd5e1; }
+    .log-tool-call .log-msg { color: #7dd3fc; }
+    .log-tool-result .log-msg { color: #86efac; }
+    .log-stage-start .log-agent { color: var(--amber); }
+    .log-stage-done .log-agent  { color: var(--green); }
+    .log-error .log-msg { color: var(--red); }
+
+    /* ── Confirmation panel ── */
+    .confirm-panel {
+      border-top: 1px solid var(--border);
+      padding: 20px;
+      background: var(--surface);
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .confirm-panel.visible { display: flex; }
+    .confirm-title { font-size: 0.95rem; font-weight: 700; color: var(--amber); display: flex; align-items: center; gap: 8px; }
+    .confirm-title .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .orders-grid { display: grid; gap: 8px; }
+    .order-card {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .order-card:hover { border-color: var(--blue); }
+    .order-card.selected { border-color: var(--green); background: #0f2720; }
+    .order-card.incomplete { border-color: #78350f; }
+    .order-check { flex-shrink: 0; width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+    .order-card.selected .order-check { border-color: var(--green); background: var(--green); }
+    .order-check svg { display: none; }
+    .order-card.selected .order-check svg { display: block; }
+    .order-info { flex: 1; }
+    .order-name { font-weight: 600; font-size: 0.9rem; }
+    .order-meta { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+    .order-status-ok  { color: var(--green); font-size: 0.75rem; margin-top: 4px; }
+    .order-status-bad { color: var(--amber); font-size: 0.75rem; margin-top: 4px; }
+
+    .confirm-actions { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    .confirm-msg-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; }
+    .confirm-msg { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 9px 12px; font-size: 0.85rem; width: 100%; font-family: var(--font); }
+    .confirm-msg:focus { outline: none; border-color: var(--blue); }
+    .action-btns { display: flex; gap: 8px; }
+    .action-btns .btn { width: auto; }
+
+    .result-panel { border-top: 1px solid var(--border); padding: 20px; display: none; }
+    .result-panel.visible { display: block; }
+    .result-title { font-size: 0.85rem; font-weight: 700; color: var(--green); margin-bottom: 10px; }
+    .result-pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; color: #a5f3fc; }
+
+    .error-banner { background: #450a0a; border: 1px solid var(--red); color: #fca5a5; border-radius: 6px; padding: 10px 14px; font-size: 0.83rem; display: none; }
+    .error-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚕ Smart Orders</h1>
+  <span class="badge">TouchWorks EHR · V11 Ambient</span>
+</header>
+
+<main>
+  <!-- Left: input -->
+  <div class="input-panel">
+    <div>
+      <label for="clinicalText">Clinical Note / Dictation</label>
+      <textarea id="clinicalText" rows="7">Order a CBC and chest X-ray for anemia workup. Patient has type 2 diabetes.</textarea>
+    </div>
+    <div id="errorBanner" class="error-banner"></div>
+    <button id="btnProcess" class="btn btn-primary" onclick="startPipeline()">
+      <span class="spinner"></span>
+      <span id="btnLabel">▶ Run Pipeline</span>
+    </button>
+  </div>
+
+  <!-- Right: log + confirmation + result -->
+  <div class="right-panel">
+    <div class="log-area" id="logArea">
+      <div class="log-empty" id="logEmpty">Run the pipeline to see live agent activity here.</div>
+    </div>
+
+    <!-- Order confirmation -->
+    <div class="confirm-panel" id="confirmPanel">
+      <div class="confirm-title">
+        <span class="pulse"></span>
+        Awaiting Provider Confirmation
+      </div>
+
+      <div class="orders-grid" id="ordersGrid"></div>
+
+      <div>
+        <div class="confirm-msg-label">Confirmation message (auto-generated from selection):</div>
+        <input class="confirm-msg" id="confirmMsg" type="text" value="submit all" />
+      </div>
+
+      <div class="confirm-actions">
+        <div class="action-btns">
+          <button class="btn btn-success" onclick="submitOrders()">
+            <span class="spinner"></span>
+            ✓ Submit Selected
+          </button>
+          <button class="btn btn-danger" onclick="cancelOrders()">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submission result -->
+    <div class="result-panel" id="resultPanel">
+      <div class="result-title">✅ Submission Complete</div>
+      <pre class="result-pre" id="resultJson"></pre>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = '';
+let validatedOrdersJson = null;
+let orderCards = [];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function setLoading(id, on) {
+  const el = document.getElementById(id);
+  el.disabled = on;
+  el.classList.toggle('loading', on);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('visible');
+}
+
+function clearError() {
+  document.getElementById('errorBanner').classList.remove('visible');
+}
+
+function resetUI() {
+  document.getElementById('logArea').innerHTML = '<div class="log-empty" id="logEmpty">Run the pipeline to see live agent activity here.</div>';
+  document.getElementById('confirmPanel').classList.remove('visible');
+  document.getElementById('resultPanel').classList.remove('visible');
+  document.getElementById('ordersGrid').innerHTML = '';
+  validatedOrdersJson = null;
+  orderCards = [];
+  clearError();
+}
+
+// ── Activity log ────────────────────────────────────────────────────────────
+
+const AGENT_COLORS = {
+  IntentAgent:       '#f59e0b',
+  MappingAgent:      '#3b82f6',
+  ValidationService: '#a78bfa',
+  SubmissionAgent:   '#22c55e',
+  Pipeline:          '#94a3b8',
+};
+
+function agentColor(name) {
+  return AGENT_COLORS[name] || '#94a3b8';
+}
+
+function appendLog(type, agent, message) {
+  const area = document.getElementById('logArea');
+  const empty = document.getElementById('logEmpty');
+  if (empty) empty.remove();
+
+  const icons = {
+    stage_start:          '⟳',
+    stage_done:           '✓',
+    tool_call:            '⚙',
+    tool_result:          '↩',
+    awaiting_confirmation:'⏸',
+    error:                '✗',
+  };
+
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  line.innerHTML = `
+    <span class="log-icon">${icons[type] || '·'}</span>
+    <span class="log-agent" style="color:${agentColor(agent)}">${agent}</span>
+    <span class="log-msg">${escHtml(message)}</span>
+  `;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Order cards ──────────────────────────────────────────────────────────────
+
+function buildOrderCards(json) {
+  try {
+    const orders = typeof json === 'string' ? JSON.parse(json) : json;
+    const grid = document.getElementById('ordersGrid');
+    grid.innerHTML = '';
+    orderCards = [];
+
+    orders.forEach((o, i) => {
+      const name = o.display_name || o.orderable_hint || `Order ${i+1}`;
+      const cat  = o.order_category || '';
+      const pri  = o.priority || 'Routine';
+      const ok   = o.is_complete === true;
+      const missing = o.missing_fields || [];
+
+      const card = document.createElement('div');
+      card.className = `order-card ${ok ? 'selected' : 'incomplete'}`;
+      card.dataset.index = i;
+      card.dataset.name = name;
+      card.innerHTML = `
+        <div class="order-check">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path d="M1 4l2.5 2.5L9 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="order-info">
+          <div class="order-name">${escHtml(name)}</div>
+          <div class="order-meta">${escHtml(cat)} · ${escHtml(pri)}</div>
+          ${ok
+            ? '<div class="order-status-ok">✓ Ready to submit</div>'
+            : `<div class="order-status-bad">⚠ Missing: ${missing.map(escHtml).join(', ')}</div>`}
+        </div>
+      `;
+      card.addEventListener('click', () => toggleCard(card, i));
+      grid.appendChild(card);
+      orderCards.push({ card, name, selected: ok });
+    });
+
+    updateConfirmMsg();
+  } catch {
+    document.getElementById('ordersGrid').innerHTML =
+      '<div style="color:var(--muted);font-size:0.82rem">Could not parse order list.</div>';
+  }
+}
+
+function toggleCard(card, i) {
+  orderCards[i].selected = !orderCards[i].selected;
+  card.classList.toggle('selected', orderCards[i].selected);
+  updateConfirmMsg();
+}
+
+function updateConfirmMsg() {
+  const selected = orderCards.filter(c => c.selected).map(c => c.name);
+  const msg = selected.length === 0 ? 'cancel'
+    : selected.length === orderCards.length ? 'submit all'
+    : `submit ${selected.join(', ')}`;
+  document.getElementById('confirmMsg').value = msg;
+}
+
+// ── SSE pipeline ─────────────────────────────────────────────────────────────
+
+async function startPipeline() {
+  resetUI();
+  const text = document.getElementById('clinicalText').value.trim();
+  if (!text) { showError('Enter clinical text first.'); return; }
+
+  setLoading('btnProcess', true);
+  document.getElementById('btnLabel').textContent = 'Running…';
+
+  try {
+    const res = await fetch(`${API}/api/orders/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clinicalText: text }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      showError(err || `HTTP ${res.status}`);
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // Parse complete SSE events (separated by blank lines)
+      const parts = buf.split('\n\n');
+      buf = parts.pop() || '';
+
+      for (const block of parts) {
+        let eventType = 'message', dataStr = '';
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          if (line.startsWith('data: '))  dataStr   = line.slice(6).trim();
+        }
+        if (dataStr) handleEvent(eventType, JSON.parse(dataStr));
+      }
+    }
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setLoading('btnProcess', false);
+    document.getElementById('btnLabel').textContent = '▶ Run Pipeline';
+  }
+}
+
+function handleEvent(type, evt) {
+  switch (type) {
+    case 'stage_start':
+    case 'stage_done':
+    case 'tool_call':
+    case 'tool_result':
+    case 'error':
+      appendLog(type, evt.agent, evt.message);
+      break;
+
+    case 'awaiting_confirmation':
+      appendLog(type, evt.agent, 'Awaiting provider confirmation…');
+      validatedOrdersJson = evt.data;
+      if (evt.data) buildOrderCards(evt.data);
+      document.getElementById('confirmPanel').classList.add('visible');
+      // scroll confirm panel into view
+      document.getElementById('confirmPanel').scrollIntoView({ behavior: 'smooth' });
+      break;
+  }
+}
+
+// ── Submit / Cancel ──────────────────────────────────────────────────────────
+
+async function submitOrders() {
+  const confirmation = document.getElementById('confirmMsg').value.trim();
+  if (!confirmation) return;
+  if (!validatedOrdersJson) { showError('No validated orders. Run the pipeline first.'); return; }
+
+  setLoading('btnProcess', true);
+  clearError();
+
+  try {
+    const res = await fetch(`${API}/api/orders/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ validatedOrdersJson, providerConfirmation: confirmation }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) { showError(data?.title || `HTTP ${res.status}`); return; }
+
+    document.getElementById('resultJson').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('resultPanel').classList.add('visible');
+    document.getElementById('confirmPanel').classList.remove('visible');
+    appendLog('stage_done', 'SubmissionAgent',
+      `Submitted: "${confirmation}"`);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    setLoading('btnProcess', false);
+  }
+}
+
+async function cancelOrders() {
+  document.getElementById('confirmMsg').value = 'cancel';
+  await submitOrders();
+}
+</script>
+</body>
+</html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Orders — Dev UI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; color: #1a1a2e; }
+    header .badge {
+      background: #e8f4fd;
+      color: #1a6eb0;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1400px; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      padding: 20px;
+    }
+    .card h2 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card h2 .step {
+      background: #1a6eb0;
+      color: #fff;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      flex-shrink: 0;
+    }
+
+    label { display: block; font-size: 0.82rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.88rem;
+      font-family: inherit;
+      resize: vertical;
+      transition: border-color 0.15s;
+      background: #fafafa;
+    }
+    textarea:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: #1a6eb0;
+      background: #fff;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    button.primary   { background: #1a6eb0; color: #fff; }
+    button.primary:hover { background: #155a91; }
+    button.success   { background: #16a34a; color: #fff; }
+    button.success:hover { background: #138038; }
+    button:disabled  { opacity: 0.5; cursor: not-allowed; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button.loading .spinner { display: block; }
+
+    .result-box {
+      margin-top: 16px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+    .result-box .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #475569;
+    }
+    .result-box pre {
+      padding: 12px;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+
+    .agent-message {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 14px;
+      margin-top: 14px;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      color: #1e3a5f;
+    }
+    .agent-message .agent-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #1a6eb0;
+      margin-bottom: 8px;
+    }
+
+    .awaiting-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-dot.yellow { background: #f59e0b; }
+    .status-dot.green  { background: #16a34a; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .error-box {
+      margin-top: 14px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      color: #991b1b;
+    }
+
+    .field-grid { display: grid; gap: 10px; }
+
+    .divider { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+
+    .hint { font-size: 0.78rem; color: #94a3b8; margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚕ Smart Orders</h1>
+  <span class="badge">DEV UI · TouchWorks EHR</span>
+</header>
+
+<div class="layout">
+
+  <!-- ── STEP 1 ── -->
+  <div class="card">
+    <h2><span class="step">1</span> Process Clinical Text</h2>
+
+    <div class="field-grid">
+      <div>
+        <label for="clinicalText">Clinical dictation / note</label>
+        <textarea id="clinicalText" rows="5" placeholder="e.g. Order a CBC and chest X-ray for anemia workup. Patient has type 2 diabetes.">Order a CBC and chest X-ray for anemia workup. Patient has type 2 diabetes.</textarea>
+      </div>
+    </div>
+
+    <button id="btnProcess" class="primary" onclick="runProcess()">
+      <span class="spinner"></span>
+      Run Pipeline
+    </button>
+
+    <div id="processError" class="error-box" style="display:none"></div>
+
+    <!-- Agent presentation message -->
+    <div id="agentPresentation" style="display:none">
+      <div class="agent-message">
+        <div class="agent-label">🤖 SubmissionAgent</div>
+        <div id="agentText"></div>
+      </div>
+      <div class="awaiting-badge">
+        <span class="status-dot yellow"></span>
+        Awaiting provider confirmation
+      </div>
+    </div>
+
+    <!-- Raw process result -->
+    <div id="processResult" class="result-box" style="display:none">
+      <div class="result-header">
+        <span>Pipeline State</span>
+        <span id="processStatus"></span>
+      </div>
+      <pre id="processJson"></pre>
+    </div>
+  </div>
+
+  <!-- ── STEP 2 ── -->
+  <div class="card">
+    <h2><span class="step">2</span> Provider Confirmation</h2>
+
+    <div class="field-grid">
+      <div>
+        <label for="validatedJson">validatedOrdersJson <span style="font-weight:400;color:#94a3b8">(auto-filled from Step 1)</span></label>
+        <textarea id="validatedJson" rows="6" placeholder="Run Step 1 first — this field fills automatically."></textarea>
+        <p class="hint">Contains the validated orders from the pipeline. You can also paste manually.</p>
+      </div>
+      <div>
+        <label for="providerConfirmation">Provider response</label>
+        <input type="text" id="providerConfirmation" value="submit all"
+               placeholder="e.g. submit all, submit CBC only, cancel" />
+        <p class="hint">Options: "submit all" · "submit CBC only" · "submit 1, 3" · "cancel"</p>
+      </div>
+    </div>
+
+    <button id="btnSubmit" class="success" onclick="runSubmit()">
+      <span class="spinner"></span>
+      Confirm &amp; Submit
+    </button>
+
+    <div id="submitError" class="error-box" style="display:none"></div>
+
+    <div id="submitResult" class="result-box" style="display:none">
+      <div class="result-header">
+        <span>Submission Results</span>
+        <span class="status-dot green" style="display:inline-block"></span>
+      </div>
+      <pre id="submitJson"></pre>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = '';  // same origin
+
+  function setLoading(btnId, loading) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.classList.toggle('loading', loading);
+  }
+
+  function showError(id, msg) {
+    const el = document.getElementById(id);
+    el.textContent = '⚠ ' + msg;
+    el.style.display = 'block';
+  }
+
+  function hideError(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
+  async function runProcess() {
+    hideError('processError');
+    document.getElementById('processResult').style.display = 'none';
+    document.getElementById('agentPresentation').style.display = 'none';
+
+    const clinicalText = document.getElementById('clinicalText').value.trim();
+    if (!clinicalText) { showError('processError', 'Enter clinical text first.'); return; }
+
+    setLoading('btnProcess', true);
+    try {
+      const res = await fetch(`${API}/api/orders/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clinicalText }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError('processError', data?.title || data || `HTTP ${res.status}`);
+        return;
+      }
+
+      // Auto-fill Step 2 with validated orders
+      if (data.validatedOrdersJson) {
+        document.getElementById('validatedJson').value = data.validatedOrdersJson;
+      }
+
+      // Show agent presentation message
+      if (data.submissionAgentResponse) {
+        document.getElementById('agentText').textContent = data.submissionAgentResponse;
+        document.getElementById('agentPresentation').style.display = 'block';
+      }
+
+      // Show full raw state (collapsed detail)
+      document.getElementById('processJson').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('processStatus').textContent =
+        data.awaitingConfirmation ? '⏳ awaiting confirmation' : '✓';
+      document.getElementById('processResult').style.display = 'block';
+
+    } catch (err) {
+      showError('processError', err.message);
+    } finally {
+      setLoading('btnProcess', false);
+    }
+  }
+
+  async function runSubmit() {
+    hideError('submitError');
+    document.getElementById('submitResult').style.display = 'none';
+
+    const validatedOrdersJson = document.getElementById('validatedJson').value.trim();
+    const providerConfirmation = document.getElementById('providerConfirmation').value.trim();
+
+    if (!validatedOrdersJson) { showError('submitError', 'Run Step 1 first or paste validatedOrdersJson.'); return; }
+    if (!providerConfirmation) { showError('submitError', 'Enter a confirmation response (e.g. "submit all").'); return; }
+
+    setLoading('btnSubmit', true);
+    try {
+      const res = await fetch(`${API}/api/orders/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ validatedOrdersJson, providerConfirmation }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showError('submitError', data?.title || data || `HTTP ${res.status}`);
+        return;
+      }
+
+      document.getElementById('submitJson').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('submitResult').style.display = 'block';
+
+    } catch (err) {
+      showError('submitError', err.message);
+    } finally {
+      setLoading('btnSubmit', false);
+    }
+  }
+</script>
+
+</body>
+</html>

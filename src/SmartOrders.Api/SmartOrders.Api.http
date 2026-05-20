@@ -1,0 +1,32 @@
+@SmartOrders.Api_HostAddress = http://localhost:5101
+
+### ① Index the order catalog (run once after Qdrant is up)
+POST {{SmartOrders.Api_HostAddress}}/api/catalog/index
+Accept: application/json
+
+###
+
+### ② STEP 1 — Process clinical text
+### Returns AwaitingConfirmation=true + SubmissionAgentResponse (the agent's "please confirm" message)
+### Copy the "validatedOrdersJson" field from the response to use in Step 2.
+POST {{SmartOrders.Api_HostAddress}}/api/orders/process
+Content-Type: application/json
+
+{
+  "clinicalText": "Order a CBC and chest X-ray for anemia workup. Patient has type 2 diabetes."
+}
+
+###
+
+### ③ STEP 2 — Provider confirms and submits
+### Paste the validatedOrdersJson from Step 1 response.
+### providerConfirmation options: "submit all", "submit CBC only", "cancel"
+POST {{SmartOrders.Api_HostAddress}}/api/orders/submit
+Content-Type: application/json
+
+{
+  "validatedOrdersJson": "<paste validatedOrdersJson from /process response>",
+  "providerConfirmation": "submit all"
+}
+
+###

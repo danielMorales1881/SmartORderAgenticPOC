@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../BobPOc"
+		},
+		{
+			"path": "../smart-orders-adk"
+		}
+	],
+	"settings": {},
+	"mcp": {
+		"servers": {
+			"playwright": {
+				"type": "stdio",
+				"command": "npx",
+				"args": [
+					"@playwright/mcp@latest",
+					"--browser", "chrome",
+					"--caps", "devtools,vision"
+				]
+			}
+		}
+	}
+}

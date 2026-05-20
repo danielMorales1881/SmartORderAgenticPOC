@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmartOrders.Api/SmartOrders.Api.csproj" />
+    <Project Path="src/SmartOrders.Core/SmartOrders.Core.csproj" />
+    <Project Path="src/SmartOrders.Infrastructure/SmartOrders.Infrastructure.csproj" />
+  </Folder>
+</Solution>
