@@ -264,7 +264,18 @@ public sealed partial class SmartOrdersPipeline(
                 normalized.Add(dict);
             }
 
-            return JsonSerializer.Serialize(normalized);
+            // Deduplicate by item_id — keep first occurrence.
+            // Prevents duplicate orders when an intent is both explicitly listed
+            // and implied via "recheck" / "repeat" (e.g. "Order BMP" + "recheck renal function").
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var deduped = normalized.Where(o =>
+            {
+                var id = o.TryGetValue("item_id", out var v) ? v?.ToString() : null;
+                if (string.IsNullOrWhiteSpace(id)) return true; // nulls always kept
+                return seen.Add(id);
+            }).ToList();
+
+            return JsonSerializer.Serialize(deduped);
         }
         catch
         {

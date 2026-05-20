@@ -86,7 +86,13 @@ public sealed partial class ValidationService(ILogger<ValidationService> logger)
             return (["item_id"], false);
 
         var canonical = CategoryNormalize.TryGetValue(orderCategory.Trim(), out var norm) ? norm : orderCategory;
-        var required = RequiredByCategory.TryGetValue(canonical, out var req) ? req : RequiredByCategory["default"];
+
+        // Reject unrecognised order categories (e.g. "Patient Instructions" from catalog items
+        // that are not true orderable entries). The provider will see ⚠ Missing: order_category.
+        if (!RequiredByCategory.ContainsKey(canonical))
+            return (["order_category"], false);
+
+        var required = RequiredByCategory[canonical];
 
         // item_id always present if passed as argument
         providedFields.Add("item_id");
