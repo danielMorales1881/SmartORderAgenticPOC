@@ -1,0 +1,29 @@
+{
+  "name": "Smart Orders .NET",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "forwardPorts": [5101, 6333, 6334],
+  "portsAttributes": {
+    "5101": {
+      "label": "Smart Orders API",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    }
+  },
+
+  "postCreateCommand": "dotnet restore /workspace/SmartOrders.slnx && echo 'Setup complete. Run: ASPNETCORE_ENVIRONMENT=Codespaces dotnet run --project src/SmartOrders.Api'",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "SmartOrders.slnx"
+      }
+    }
+  }
+}
